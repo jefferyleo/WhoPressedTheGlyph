@@ -1,6 +1,7 @@
 import Link from "next/link";
 import GlyphResult from "@/components/GlyphResult";
 import { getMatch, getHeroes, transformMatchData } from "@/lib/opendota";
+import type { MatchGlyphResult, HeroData } from "@/lib/types";
 
 interface MatchPageProps {
   params: Promise<{ id: string }>;
@@ -23,23 +24,16 @@ export default async function MatchPage({ params }: MatchPageProps) {
     );
   }
 
-  try {
-    const [match, heroes] = await Promise.all([getMatch(id), getHeroes()]);
-    const result = transformMatchData(match);
+  let result: MatchGlyphResult;
+  let heroes: Record<number, HeroData>;
 
-    return (
-      <div>
-        <Link
-          href="/"
-          className="text-amber-500 hover:underline mb-6 inline-block"
-        >
-          &larr; Search another match
-        </Link>
-        <GlyphResult match={result} heroes={heroes} />
-      </div>
-    );
+  try {
+    const [match, heroData] = await Promise.all([getMatch(id), getHeroes()]);
+    result = transformMatchData(match);
+    heroes = heroData;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to load match";
+    const message =
+      err instanceof Error ? err.message : "Failed to load match";
     return (
       <div className="text-center py-20">
         <h1 className="text-2xl font-bold text-red-400 mb-2">Error</h1>
@@ -50,4 +44,16 @@ export default async function MatchPage({ params }: MatchPageProps) {
       </div>
     );
   }
+
+  return (
+    <div>
+      <Link
+        href="/"
+        className="text-amber-500 hover:underline mb-6 inline-block"
+      >
+        &larr; Search another match
+      </Link>
+      <GlyphResult match={result} heroes={heroes} />
+    </div>
+  );
 }

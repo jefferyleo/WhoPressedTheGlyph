@@ -17,7 +17,11 @@
       "Bash(curl -sL \"https://raw.githubusercontent.com/SteamDatabase/GameTracking-Dota2/master/Protobufs/dota_commonmessages.proto\")",
       "Bash(docker --version)",
       "Bash(\"/c/Program Files/Docker/Docker/resources/bin/docker\" --version)",
-      "Bash(cmd.exe /c \"docker --version\")"
+      "Bash(cmd.exe /c \"docker --version\")",
+      "Bash(npm run:*)",
+      "Bash(npx next:*)",
+      "Bash(node -e \"const p = require\\(''eslint-config-next/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(node -e \"import\\(''eslint-config-next''\\).then\\(m => console.log\\(Object.keys\\(m\\)\\)\\)\")"
     ]
   }
 }

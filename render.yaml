@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: dota2-replay-parser
+    runtime: image
+    image:
+      url: docker.io/odota/parser:latest
+    envVars:
+      - key: PORT
+        value: 5600
+    plan: free
