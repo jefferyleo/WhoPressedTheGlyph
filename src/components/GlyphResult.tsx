@@ -47,18 +47,18 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
     setLoadingReplay(true);
     setReplayError(null);
     try {
-      const res = await fetch(`/api/replay/${match.matchId}`);
+      const res = await fetch(`/api/stratz/${match.matchId}`);
       const data = await res.json();
       if (!res.ok) {
-        setReplayError(data.error || "Failed to parse replay");
+        setReplayError(data.error || "Failed to fetch glyph timestamps");
       } else {
         setGlyphEvents(data.glyphEvents ?? []);
         if ((data.glyphEvents ?? []).length === 0) {
-          setReplayError("No glyph events found in replay.");
+          setReplayError("No glyph events found for this match.");
         }
       }
     } catch {
-      setReplayError("Network error. Is the replay parser running?");
+      setReplayError("Network error. Please try again.");
     } finally {
       setLoadingReplay(false);
     }
@@ -89,7 +89,6 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
         glyphEvents={glyphEvents}
         players={match.players}
         heroes={heroes}
-        replayUrl={match.replayUrl}
         loadingReplay={loadingReplay}
         replayError={replayError}
         onLoadGlyphTimestamps={handleLoadGlyphTimestamps}

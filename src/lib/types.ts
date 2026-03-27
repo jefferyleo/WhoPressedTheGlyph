@@ -80,6 +80,8 @@ export interface BuildingKill {
 export interface GlyphEvent {
   time: number;
   playerSlot: number;
+  isRadiant: boolean | null;
+  heroId: number | null;
 }
 
 export interface MatchGlyphResult {

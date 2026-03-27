@@ -11,7 +11,6 @@ interface TowerTimelineProps {
   glyphEvents: GlyphEvent[];
   players: PlayerGlyphData[];
   heroes: Record<number, HeroData>;
-  replayUrl: string | null;
   loadingReplay: boolean;
   replayError: string | null;
   onLoadGlyphTimestamps: () => void;
@@ -26,7 +25,6 @@ export default function TowerTimeline({
   glyphEvents,
   players,
   heroes,
-  replayUrl,
   loadingReplay,
   replayError,
   onLoadGlyphTimestamps,
@@ -79,7 +77,7 @@ export default function TowerTimeline({
       </div>
 
       {/* Load Glyph Timestamps button */}
-      {!hasGlyphTimestamps && replayUrl && (
+      {!hasGlyphTimestamps && (
         <div className="mb-4 text-center">
           <button
             onClick={onLoadGlyphTimestamps}
@@ -87,14 +85,14 @@ export default function TowerTimeline({
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
           >
             {loadingReplay
-              ? "Parsing replay... (this may take a minute)"
-              : "Load Glyph Timestamps from Replay"}
+              ? "Loading glyph timestamps..."
+              : "Load Glyph Timestamps"}
           </button>
           {replayError && (
             <p className="mt-2 text-sm text-red-400">{replayError}</p>
           )}
           <p className="mt-1 text-xs text-gray-500">
-            Requires odota/parser running on localhost:5600
+            Fetches exact glyph usage times from STRATZ
           </p>
         </div>
       )}
@@ -196,18 +194,51 @@ function GlyphRow({
   player: PlayerGlyphData | undefined;
   heroes: Record<number, HeroData>;
 }) {
-  const hero = player ? heroes[player.heroId] : null;
+  // Use heroId from event (STRATZ attribution) or fall back to player data
+  const heroId = event.heroId ?? player?.heroId;
+  const hero = heroId ? heroes[heroId] : null;
   const heroImg = hero ? getHeroImageUrl(hero.name) : null;
-  const playerName = player?.personaname ?? "Unknown";
+  const playerName = player?.personaname ?? (hero?.localized_name ?? null);
+  const isRadiant = event.isRadiant;
+
+  // Team-colored styling
+  const teamColor =
+    isRadiant === true
+      ? "text-green-400"
+      : isRadiant === false
+        ? "text-red-400"
+        : "text-amber-300";
+  const teamLabel =
+    isRadiant === true
+      ? "Radiant"
+      : isRadiant === false
+        ? "Dire"
+        : "";
+  const dotColor =
+    isRadiant === true
+      ? "bg-green-500"
+      : isRadiant === false
+        ? "bg-red-500"
+        : "bg-amber-500";
+  const bgColor =
+    isRadiant === true
+      ? "bg-green-900/20 border-green-700/30"
+      : isRadiant === false
+        ? "bg-red-900/20 border-red-700/30"
+        : "bg-amber-900/30 border-amber-700/30";
 
   return (
-    <div className="flex items-center gap-3 py-1.5 px-3 rounded bg-amber-900/30 border border-amber-700/30">
-      <span className="text-sm text-amber-400 font-mono w-12 flex-shrink-0">
+    <div
+      className={`flex items-center gap-3 py-1.5 px-3 rounded border ${bgColor}`}
+    >
+      <span
+        className={`text-sm font-mono w-12 flex-shrink-0 ${teamColor}`}
+      >
         {formatDuration(event.time)}
       </span>
-      <span className="w-2 h-2 rounded-full flex-shrink-0 bg-amber-500" />
-      <span className="text-sm font-medium text-amber-300 flex-1">
-        Glyph used
+      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+      <span className={`text-sm font-medium flex-1 ${teamColor}`}>
+        {teamLabel ? `${teamLabel} Glyph` : "Glyph used"}
       </span>
       <div className="flex items-center gap-1.5 flex-shrink-0">
         {heroImg && (
@@ -217,9 +248,11 @@ function GlyphRow({
             className="w-8 h-[18px] rounded object-cover"
           />
         )}
-        <span className="text-xs text-amber-400 hidden sm:inline">
-          {playerName}
-        </span>
+        {playerName && (
+          <span className={`text-xs hidden sm:inline ${teamColor}`}>
+            {playerName}
+          </span>
+        )}
       </div>
     </div>
   );
