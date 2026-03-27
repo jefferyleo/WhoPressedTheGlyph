@@ -165,7 +165,7 @@ function BuildingRow({
           isRadiant ? "text-green-300" : "text-red-300"
         }`}
       >
-        {kill.building}
+        {kill.building} Destroyed
       </span>
       {destroyerHero && (
         <div className="flex items-center gap-1.5 flex-shrink-0">

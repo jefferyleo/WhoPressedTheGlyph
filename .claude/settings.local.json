@@ -42,7 +42,8 @@
       "mcp__plugin_playwright_playwright__browser_navigate",
       "mcp__plugin_playwright_playwright__browser_click",
       "mcp__plugin_playwright_playwright__browser_evaluate",
-      "Bash(\"/c/Users/jeffe/Documents/Visual Studio 2026/Projects/WhoPressTheGlyph/.env.local\")"
+      "Bash(\"/c/Users/jeffe/Documents/Visual Studio 2026/Projects/WhoPressTheGlyph/.env.local\")",
+      "Bash(netstat -ano)"
     ]
   }
 }
