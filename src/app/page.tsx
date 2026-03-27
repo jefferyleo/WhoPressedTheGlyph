@@ -1,8 +1,22 @@
+import Script from "next/script";
 import MatchInput from "@/components/MatchInput";
 
 export default function HomePage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8">
+      <Script
+        src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js"
+        data-name="bmc-button"
+        data-slug="jefferyleo"
+        data-color="#FFDD00"
+        data-emoji=""
+        data-font="Poppins"
+        data-text="Buy me a coffee"
+        data-outline-color="#000000"
+        data-font-color="#000000"
+        data-coffee-color="#ffffff"
+        strategy="lazyOnload"
+      />
       <div className="text-center">
         <h1 className="text-4xl font-bold mb-2">
           Who Pressed The{" "}
@@ -30,15 +44,6 @@ export default function HomePage() {
           OpenDota API
         </a>
       </div>
-      <a
-        href="https://buymeacoffee.com/jefferyleo"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#FFDD00] hover:bg-[#FFE944] text-gray-900 font-bold rounded-lg transition-colors text-sm"
-      >
-        <span className="text-lg">&#9749;</span>
-        Buy me a coffee
-      </a>
     </div>
   );
 }
