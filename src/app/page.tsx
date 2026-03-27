@@ -30,6 +30,15 @@ export default function HomePage() {
           OpenDota API
         </a>
       </div>
+      <a
+        href="https://buymeacoffee.com/jefferyleo"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#FFDD00] hover:bg-[#FFE944] text-gray-900 font-bold rounded-lg transition-colors text-sm"
+      >
+        <span className="text-lg">&#9749;</span>
+        Buy me a coffee
+      </a>
     </div>
   );
 }
