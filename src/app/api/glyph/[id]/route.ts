@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { fetchStratzGlyphEvents } from "@/lib/stratz";
-import { getCachedGlyphEvents, requestParse } from "@/lib/supabase";
+import { getCachedGlyphEvents, requestParse, saveGlyphEvents } from "@/lib/supabase";
 
 /**
  * Unified glyph endpoint:
- * 1. Try STRATZ first (fast)
- * 2. Check Supabase cache (already parsed?)
- * 3. If not cached, create a pending parse job
- * 4. Return status for client to poll
+ * 1. Check Supabase cache first (instant if previously fetched)
+ * 2. Try STRATZ (save to cache on success)
+ * 3. If pending/parsing parser job exists, return status for polling
+ * 4. Create a new pending parse job for Mac Mini worker
  */
 export async function GET(
   _request: Request,
@@ -21,10 +21,34 @@ export async function GET(
 
   const matchId = Number(id);
 
-  // 1. Try STRATZ first
+  // 1. Check Supabase cache first (fastest path)
+  const cached = await getCachedGlyphEvents(matchId);
+
+  if (cached) {
+    if (cached.status === "completed" && cached.glyph_data) {
+      return NextResponse.json({
+        glyphEvents: cached.glyph_data,
+        source: "cache",
+        status: "completed",
+      });
+    }
+    if (cached.status === "pending" || cached.status === "parsing") {
+      return NextResponse.json({
+        glyphEvents: [],
+        source: "parser",
+        status: cached.status,
+      });
+    }
+    // If failed, continue to try STRATZ (data may be available now)
+  }
+
+  // 2. Try STRATZ
   try {
     const result = await fetchStratzGlyphEvents(id);
     if (result.glyphEvents.length > 0) {
+      // Save to Supabase cache for future requests
+      await saveGlyphEvents(matchId, result.glyphEvents, "stratz");
+
       return NextResponse.json({
         glyphEvents: result.glyphEvents,
         source: "stratz",
@@ -35,35 +59,7 @@ export async function GET(
     // STRATZ failed, continue to fallback
   }
 
-  // 2. Check Supabase cache
-  const cached = await getCachedGlyphEvents(matchId);
-
-  if (cached) {
-    if (cached.status === "completed" && cached.glyph_data) {
-      return NextResponse.json({
-        glyphEvents: cached.glyph_data,
-        source: "parser",
-        status: "completed",
-      });
-    }
-    if (cached.status === "failed") {
-      return NextResponse.json({
-        glyphEvents: [],
-        source: "parser",
-        status: "failed",
-        error: cached.error || "Parse failed",
-      });
-    }
-    if (cached.status === "pending" || cached.status === "parsing") {
-      return NextResponse.json({
-        glyphEvents: [],
-        source: "parser",
-        status: cached.status,
-      });
-    }
-  }
-
-  // 3. No STRATZ data and no cache — request a parse job
+  // 3. No cache and no STRATZ data — create a pending parse job
   const job = await requestParse(matchId);
 
   if (job) {

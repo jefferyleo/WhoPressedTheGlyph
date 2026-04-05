@@ -117,7 +117,7 @@ async function parseReplay(replayUrl: string, players: MatchData["players"]): Pr
   console.log("  Sending to parser...");
   const res = await fetch(PARSER_URL, {
     method: "POST",
-    body: demBuffer,
+    body: new Uint8Array(demBuffer),
     headers: { "Content-Type": "application/octet-stream" },
     signal: AbortSignal.timeout(300_000),
   });

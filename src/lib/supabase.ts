@@ -68,6 +68,27 @@ export async function updateParseJob(
     .eq("match_id", matchId);
 }
 
+/** Save glyph events to cache (upsert — works for new or existing rows) */
+export async function saveGlyphEvents(
+  matchId: number,
+  glyphEvents: GlyphEvent[],
+  source: string
+): Promise<void> {
+  if (!supabase) return;
+  await supabase
+    .from("glyph_events")
+    .upsert(
+      {
+        match_id: matchId,
+        status: "completed" as const,
+        glyph_data: glyphEvents,
+        error: null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "match_id" }
+    );
+}
+
 /** Get pending jobs for the worker to pick up */
 export async function getPendingJobs(): Promise<GlyphJobRow[]> {
   if (!supabase) return [];
