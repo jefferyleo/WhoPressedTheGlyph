@@ -45,9 +45,58 @@ async function getReplayUrl(matchId: number): Promise<string | null> {
 }
 
 async function parseReplay(replayUrl: string): Promise<GlyphEvent[]> {
-  const encodedUrl = encodeURIComponent(replayUrl);
-  const res = await fetch(`${PARSER_URL}/blob?replay_url=${encodedUrl}`, {
-    signal: AbortSignal.timeout(300_000), // 5 minute timeout
+  // Download the replay file
+  console.log("  Downloading replay...");
+  const downloadRes = await fetch(replayUrl, {
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!downloadRes.ok) {
+    throw new Error(`Failed to download replay: HTTP ${downloadRes.status}`);
+  }
+  const replayBuffer = Buffer.from(await downloadRes.arrayBuffer());
+  console.log(`  Downloaded ${(replayBuffer.length / 1024 / 1024).toFixed(1)}MB`);
+
+  // Decompress bz2 if needed
+  let demBuffer: Buffer;
+  if (replayUrl.endsWith(".bz2")) {
+    console.log("  Decompressing bz2...");
+    const { execSync } = await import("child_process");
+    // Write to temp file, decompress, read back
+    const fs = await import("fs");
+    const os = await import("os");
+    const path = await import("path");
+    const tmpBz2 = path.join(os.tmpdir(), `replay_${Date.now()}.dem.bz2`);
+    const tmpDem = tmpBz2.replace(".bz2", "");
+    fs.writeFileSync(tmpBz2, replayBuffer);
+    try {
+      execSync(`bunzip2 -f "${tmpBz2}"`, { timeout: 60_000 });
+      demBuffer = fs.readFileSync(tmpDem);
+      fs.unlinkSync(tmpDem);
+    } catch {
+      // Try with bzip2 -d as fallback
+      try {
+        execSync(`bzip2 -d -f "${tmpBz2}"`, { timeout: 60_000 });
+        demBuffer = fs.readFileSync(tmpDem);
+        fs.unlinkSync(tmpDem);
+      } catch {
+        // Clean up
+        try { fs.unlinkSync(tmpBz2); } catch {}
+        try { fs.unlinkSync(tmpDem); } catch {}
+        throw new Error("Failed to decompress replay (bunzip2/bzip2 not found)");
+      }
+    }
+    console.log(`  Decompressed to ${(demBuffer.length / 1024 / 1024).toFixed(1)}MB`);
+  } else {
+    demBuffer = replayBuffer;
+  }
+
+  // Send raw .dem to parser POST / endpoint (returns NDJSON)
+  console.log("  Sending to parser...");
+  const res = await fetch(PARSER_URL, {
+    method: "POST",
+    body: demBuffer,
+    headers: { "Content-Type": "application/octet-stream" },
+    signal: AbortSignal.timeout(300_000),
   });
 
   if (res.status === 204) {

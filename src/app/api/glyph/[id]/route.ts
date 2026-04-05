@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchStratzGlyphEvents } from "@/lib/stratz";
 import { getCachedGlyphEvents, requestParse } from "@/lib/supabase";
 
 /**
@@ -22,20 +23,13 @@ export async function GET(
 
   // 1. Try STRATZ first
   try {
-    const stratzRes = await fetch(
-      `${getBaseUrl()}/api/stratz/${id}`,
-      { headers: { "Content-Type": "application/json" } }
-    );
-
-    if (stratzRes.ok) {
-      const stratzData = await stratzRes.json();
-      if (stratzData.glyphEvents && stratzData.glyphEvents.length > 0) {
-        return NextResponse.json({
-          glyphEvents: stratzData.glyphEvents,
-          source: "stratz",
-          status: "completed",
-        });
-      }
+    const result = await fetchStratzGlyphEvents(id);
+    if (result.glyphEvents.length > 0) {
+      return NextResponse.json({
+        glyphEvents: result.glyphEvents,
+        source: "stratz",
+        status: "completed",
+      });
     }
   } catch {
     // STRATZ failed, continue to fallback
@@ -87,11 +81,4 @@ export async function GET(
     status: "completed",
     error: "No glyph timestamp data available.",
   });
-}
-
-function getBaseUrl(): string {
-  // In server components/routes, construct the base URL
-  const vercelUrl = process.env.VERCEL_URL;
-  if (vercelUrl) return `https://${vercelUrl}`;
-  return `http://localhost:${process.env.PORT || 3000}`;
 }

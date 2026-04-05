@@ -51,7 +51,14 @@
       "Bash(curl -s \"https://api.opendota.com/api/matches/8757740953\")",
       "Bash(curl -s \"https://api.opendota.com/api/matches/8741915718\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://dota2parser.ezverify.app/\")",
-      "Bash(curl -s -v \"https://dota2parser.ezverify.app/\")"
+      "Bash(curl -s -v \"https://dota2parser.ezverify.app/\")",
+      "Bash(curl -s \"https://alwfkjcybmvplllzbzui.supabase.co/rest/v1/glyph_events?select=*\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsd2ZramN5Ym12cGxsbHpienVpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTM0MzgyMywiZXhwIjoyMDkwOTE5ODIzfQ.SOgLgcCHJtIP0ypY-tanwWqfhtNv71YFYY1zsQxCpws\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsd2ZramN5Ym12cGxsbHpienVpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTM0MzgyMywiZXhwIjoyMDkwOTE5ODIzfQ.SOgLgcCHJtIP0ypY-tanwWqfhtNv71YFYY1zsQxCpws\")",
+      "Bash(node -e \"const c=[];process.stdin.on\\(''''data'''',d=>c.push\\(d\\)\\);process.stdin.on\\(''''end'''',\\(\\)=>console.log\\(JSON.stringify\\(JSON.parse\\(Buffer.concat\\(c\\).toString\\(\\)\\),null,2\\)\\)\\)\")",
+      "Bash(curl -s \"http://replay152.valve.net/570/8757740953_1522587519.dem.bz2\" -o /tmp/replay.dem.bz2)",
+      "Read(//tmp/**)",
+      "Bash(bunzip2 -k -f /tmp/replay.dem.bz2)",
+      "Bash(bzip2 -d -k -f /tmp/replay.dem.bz2)",
+      "Bash(curl -s --max-time 300 \"https://dota2parser.ezverify.app\" --data-binary \"@/tmp/replay.dem\" -H \"Content-Type: application/octet-stream\")"
     ]
   }
 }
