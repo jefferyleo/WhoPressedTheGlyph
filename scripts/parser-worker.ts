@@ -37,14 +37,39 @@ interface GlyphEvent {
   heroId: number | null;
 }
 
-async function getReplayUrl(matchId: number): Promise<string | null> {
+interface MatchData {
+  replay_url: string | null;
+  players: { hero_id: number; player_slot: number; isRadiant: boolean }[];
+}
+
+async function getMatchData(matchId: number): Promise<MatchData | null> {
   const res = await fetch(`https://api.opendota.com/api/matches/${matchId}`);
   if (!res.ok) return null;
   const data = await res.json();
-  return data.replay_url || null;
+  return {
+    replay_url: data.replay_url || null,
+    players: (data.players || []).map((p: { hero_id: number; player_slot: number; isRadiant: boolean }) => ({
+      hero_id: p.hero_id,
+      player_slot: p.player_slot,
+      isRadiant: p.isRadiant,
+    })),
+  };
 }
 
-async function parseReplay(replayUrl: string): Promise<GlyphEvent[]> {
+async function parseReplay(replayUrl: string, players: MatchData["players"]): Promise<GlyphEvent[]> {
+  // Build slot-to-player lookup
+  // Parser uses slot 0-9, OpenDota uses player_slot 0-4 (Radiant) and 128-132 (Dire)
+  // Parser slot 0-4 = Radiant, 5-9 = Dire
+  const slotToPlayer: Record<number, { heroId: number; playerSlot: number; isRadiant: boolean }> = {};
+  for (const p of players) {
+    // Convert OpenDota player_slot to parser slot index
+    const parserSlot = p.isRadiant ? p.player_slot : p.player_slot - 128 + 5;
+    slotToPlayer[parserSlot] = {
+      heroId: p.hero_id,
+      playerSlot: p.player_slot,
+      isRadiant: p.isRadiant,
+    };
+  }
   // Download the replay file
   console.log("  Downloading replay...");
   const downloadRes = await fetch(replayUrl, {
@@ -118,11 +143,13 @@ async function parseReplay(replayUrl: string): Promise<GlyphEvent[]> {
         event.type === "CHAT_MESSAGE_GLYPH_USED" ||
         event.type === 12
       ) {
+        const parserSlot = event.player1 ?? event.playerid_1 ?? event.slot ?? -1;
+        const player = slotToPlayer[parserSlot];
         glyphEvents.push({
           time: Math.round(event.time ?? 0),
-          playerSlot: event.player1 ?? event.playerid_1 ?? event.slot ?? -1,
-          isRadiant: null,
-          heroId: null,
+          playerSlot: player?.playerSlot ?? -1,
+          isRadiant: player?.isRadiant ?? (parserSlot < 5 ? true : parserSlot <= 9 ? false : null),
+          heroId: player?.heroId ?? null,
         });
       }
     } catch {
@@ -143,17 +170,18 @@ async function processJob(matchId: number): Promise<void> {
     .eq("match_id", matchId);
 
   try {
-    // Get replay URL
-    const replayUrl = await getReplayUrl(matchId);
-    if (!replayUrl) {
+    // Get match data (replay URL + player info)
+    const matchData = await getMatchData(matchId);
+    if (!matchData || !matchData.replay_url) {
       throw new Error("No replay URL available (replay may have expired)");
     }
 
-    console.log(`  Replay URL: ${replayUrl}`);
+    console.log(`  Replay URL: ${matchData.replay_url}`);
+    console.log(`  Players: ${matchData.players.length}`);
     console.log(`  Parsing... (this may take a few minutes)`);
 
-    // Parse replay
-    const glyphEvents = await parseReplay(replayUrl);
+    // Parse replay with player data for hero attribution
+    const glyphEvents = await parseReplay(matchData.replay_url, matchData.players);
 
     console.log(`  Found ${glyphEvents.length} glyph events`);
 
