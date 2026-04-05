@@ -37,9 +37,16 @@ interface GlyphEvent {
   heroId: number | null;
 }
 
+interface MatchPlayer {
+  hero_id: number;
+  player_slot: number;
+  isRadiant: boolean;
+  glyphUses: number;
+}
+
 interface MatchData {
   replay_url: string | null;
-  players: { hero_id: number; player_slot: number; isRadiant: boolean }[];
+  players: MatchPlayer[];
 }
 
 async function getMatchData(matchId: number): Promise<MatchData | null> {
@@ -48,28 +55,19 @@ async function getMatchData(matchId: number): Promise<MatchData | null> {
   const data = await res.json();
   return {
     replay_url: data.replay_url || null,
-    players: (data.players || []).map((p: { hero_id: number; player_slot: number; isRadiant: boolean }) => ({
+    players: (data.players || []).map((p: { hero_id: number; player_slot: number; isRadiant: boolean; actions?: Record<string, number> }) => ({
       hero_id: p.hero_id,
       player_slot: p.player_slot,
       isRadiant: p.isRadiant,
+      glyphUses: p.actions?.["24"] ?? 0,
     })),
   };
 }
 
 async function parseReplay(replayUrl: string, players: MatchData["players"]): Promise<GlyphEvent[]> {
-  // Build slot-to-player lookup
-  // Parser uses slot 0-9, OpenDota uses player_slot 0-4 (Radiant) and 128-132 (Dire)
-  // Parser slot 0-4 = Radiant, 5-9 = Dire
-  const slotToPlayer: Record<number, { heroId: number; playerSlot: number; isRadiant: boolean }> = {};
-  for (const p of players) {
-    // Convert OpenDota player_slot to parser slot index
-    const parserSlot = p.isRadiant ? p.player_slot : p.player_slot - 128 + 5;
-    slotToPlayer[parserSlot] = {
-      heroId: p.hero_id,
-      playerSlot: p.player_slot,
-      isRadiant: p.isRadiant,
-    };
-  }
+  // Parser glyph events have player1 = team number (2 = Radiant, 3 = Dire)
+  // We need to attribute heroes using OpenDota's per-player glyph counts
+  // Strategy: build a queue of heroes per team sorted by glyph count, assign chronologically
   // Download the replay file
   console.log("  Downloading replay...");
   const downloadRes = await fetch(replayUrl, {
@@ -132,7 +130,10 @@ async function parseReplay(replayUrl: string, players: MatchData["players"]): Pr
   }
 
   const text = await res.text();
-  const glyphEvents: GlyphEvent[] = [];
+
+  // Collect raw glyph events with team info
+  // Parser player1 field = team number: 2 = Radiant, 3 = Dire
+  const rawGlyphs: { time: number; isRadiant: boolean }[] = [];
 
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
@@ -143,19 +144,59 @@ async function parseReplay(replayUrl: string, players: MatchData["players"]): Pr
         event.type === "CHAT_MESSAGE_GLYPH_USED" ||
         event.type === 12
       ) {
-        const parserSlot = event.player1 ?? event.playerid_1 ?? event.slot ?? -1;
-        const player = slotToPlayer[parserSlot];
-        glyphEvents.push({
+        const team = event.player1 ?? event.value ?? -1;
+        rawGlyphs.push({
           time: Math.round(event.time ?? 0),
-          playerSlot: player?.playerSlot ?? -1,
-          isRadiant: player?.isRadiant ?? (parserSlot < 5 ? true : parserSlot <= 9 ? false : null),
-          heroId: player?.heroId ?? null,
+          isRadiant: team === 2, // Dota 2: team 2 = Radiant, team 3 = Dire
         });
       }
     } catch {
       // Skip malformed lines
     }
   }
+
+  // Attribute heroes using OpenDota per-player glyph counts
+  // Same queue strategy as STRATZ route
+  const radiantQueue: { heroId: number; playerSlot: number }[] = [];
+  const direQueue: { heroId: number; playerSlot: number }[] = [];
+
+  for (const p of players) {
+    if (p.glyphUses <= 0) continue;
+    if (p.isRadiant) {
+      for (let i = 0; i < p.glyphUses; i++) {
+        radiantQueue.push({ heroId: p.hero_id, playerSlot: p.player_slot });
+      }
+    } else {
+      for (let i = 0; i < p.glyphUses; i++) {
+        direQueue.push({ heroId: p.hero_id, playerSlot: p.player_slot });
+      }
+    }
+  }
+
+  let radiantIdx = 0;
+  let direIdx = 0;
+
+  const glyphEvents: GlyphEvent[] = rawGlyphs.map((g) => {
+    let heroId: number | null = null;
+    let playerSlot = -1;
+
+    if (g.isRadiant && radiantIdx < radiantQueue.length) {
+      heroId = radiantQueue[radiantIdx].heroId;
+      playerSlot = radiantQueue[radiantIdx].playerSlot;
+      radiantIdx++;
+    } else if (!g.isRadiant && direIdx < direQueue.length) {
+      heroId = direQueue[direIdx].heroId;
+      playerSlot = direQueue[direIdx].playerSlot;
+      direIdx++;
+    }
+
+    return {
+      time: g.time,
+      playerSlot,
+      isRadiant: g.isRadiant,
+      heroId,
+    };
+  });
 
   return glyphEvents;
 }
