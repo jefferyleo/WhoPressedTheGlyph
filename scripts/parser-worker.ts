@@ -125,11 +125,22 @@ async function parseReplay(replayUrl: string, players: MatchData["players"]): Pr
   if (res.status === 204) {
     throw new Error("Replay file is corrupted or unavailable");
   }
+  if (res.status === 500) {
+    throw new Error("Parser failed to process replay (invalid or corrupted replay file)");
+  }
   if (!res.ok) {
     throw new Error(`Parser returned status ${res.status}`);
   }
 
   const text = await res.text();
+
+  // Check if parser returned an error instead of NDJSON
+  if (text.includes("given stream does not seem to contain a valid replay")) {
+    throw new Error("Invalid replay file format");
+  }
+  if (text.length === 0) {
+    throw new Error("Parser returned empty response");
+  }
 
   // Collect raw glyph events with team info
   // Parser player1 field = team number: 2 = Radiant, 3 = Dire
@@ -213,12 +224,36 @@ async function processJob(matchId: number): Promise<void> {
   try {
     // Get match data (replay URL + player info)
     const matchData = await getMatchData(matchId);
-    if (!matchData || !matchData.replay_url) {
-      throw new Error("No replay URL available (replay may have expired)");
+    if (!matchData) {
+      throw new Error("Match not found on OpenDota (invalid match ID?)");
+    }
+    if (matchData.players.length === 0) {
+      throw new Error("Match has no player data (invalid or incomplete match)");
+    }
+    if (!matchData.replay_url) {
+      throw new Error("No replay URL available (replay may have expired or match needs to be parsed on OpenDota first)");
+    }
+
+    // Check if anyone actually used glyph
+    const totalGlyphs = matchData.players.reduce((sum, p) => sum + p.glyphUses, 0);
+    if (totalGlyphs === 0) {
+      console.log(`  No glyph usage detected in this match. Saving empty result.`);
+      await supabase
+        .from("glyph_events")
+        .update({
+          status: "completed",
+          glyph_data: [],
+          error: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("match_id", matchId);
+      console.log(`  Done! Match ${matchId} completed (no glyphs used).`);
+      return;
     }
 
     console.log(`  Replay URL: ${matchData.replay_url}`);
     console.log(`  Players: ${matchData.players.length}`);
+    console.log(`  Total glyph uses: ${totalGlyphs}`);
     console.log(`  Parsing... (this may take a few minutes)`);
 
     // Parse replay with player data for hero attribution
