@@ -45,7 +45,13 @@
       "Bash(\"/c/Users/jeffe/Documents/Visual Studio 2026/Projects/WhoPressTheGlyph/.env.local\")",
       "Bash(netstat -ano)",
       "Bash(taskkill /PID 52364 /F)",
-      "Bash(cmd.exe /c \"taskkill /PID 52364 /F\")"
+      "Bash(cmd.exe /c \"taskkill /PID 52364 /F\")",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s \"https://elements-releases-pump-proud.trycloudflare.com\" -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl -s \"https://api.opendota.com/api/matches/8757740953\")",
+      "Bash(curl -s \"https://api.opendota.com/api/matches/8741915718\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://dota2parser.ezverify.app/\")",
+      "Bash(curl -s -v \"https://dota2parser.ezverify.app/\")"
     ]
   }
 }
