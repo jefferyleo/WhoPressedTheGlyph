@@ -13,15 +13,16 @@ Dota 2 match analyzer that reveals who pressed the Glyph of Fortification — wi
 - **Hero Images** — Player hero portraits from Valve's CDN
 - **Parse Requests** — Request OpenDota replay parsing for unparsed matches
 - **Async Replay Parsing** — Self-hosted parser with Supabase queue for matches STRATZ doesn't cover
+- **Smart Caching** — All glyph results (STRATZ + parser) are cached in Supabase for instant repeat visits
 
 ## How It Works
 
 1. Enter a Dota 2 match ID
 2. The app fetches match data from **OpenDota** (player stats, glyph counts, building kills)
 3. Glyph timestamps are loaded automatically:
-   - **STRATZ API** is tried first (covers most matches)
-   - If STRATZ has no data, checks **Supabase** for cached parser results
-   - If not cached, creates an async parse job — a self-hosted **replay parser** on a Mac Mini picks it up
+   - **Supabase cache** is checked first (instant for previously viewed matches)
+   - If not cached, **STRATZ API** is queried (results are saved to cache for future visits)
+   - If STRATZ has no data, an async parse job is created — a self-hosted **replay parser** on a Mac Mini picks it up
 4. The timeline merges building destructions with glyph events, showing who glyphed and when
 
 ### Hero Attribution Logic
@@ -104,7 +105,7 @@ The worker polls Supabase every 30 seconds, downloads replays, parses them local
 |--------|------|----------|
 | [OpenDota API](https://docs.opendota.com/) | None (free) | Match data, player stats, per-player glyph counts, building kill objectives |
 | [STRATZ GraphQL API](https://stratz.com/api) | Free API key | Glyph timestamps, team attribution |
-| [Supabase](https://supabase.com) | Free tier | Parse job queue, cached glyph results |
+| [Supabase](https://supabase.com) | Free tier | Parse job queue, cached glyph results (STRATZ + parser) |
 | [odota/parser](https://github.com/odota/parser) | Self-hosted Docker | Replay parsing for glyph timestamp extraction |
 
 ## Environment Variables
@@ -124,7 +125,7 @@ src/
     page.tsx                    # Homepage with match ID search
     matches/[id]/page.tsx       # Match detail page (server component)
     api/
-      glyph/[id]/route.ts      # Unified glyph endpoint (STRATZ -> Supabase -> queue)
+      glyph/[id]/route.ts      # Unified glyph endpoint (cache -> STRATZ -> queue)
       stratz/[id]/route.ts      # STRATZ glyph timestamps
       parse/[id]/route.ts       # OpenDota parse request
       replay/[id]/route.ts      # Legacy direct replay parser route
@@ -148,16 +149,22 @@ scripts/
 ```
 User -> Vercel (Next.js)
           |
-          +-> STRATZ API (primary, fast)
+          +-> Supabase cache (fastest — instant for repeat visits)
+          |     * both STRATZ and parser results are cached here
           |
-          +-> Supabase (cache check / create pending job)
+          +-> STRATZ API (primary source — results saved to cache)
+          |
+          +-> Supabase queue (create pending job if no data)
                   |
           Mac Mini Worker (polls every 30s)
-            -> downloads replay from Valve
-            -> parses with odota/parser (Docker)
+            -> downloads replay .dem.bz2 from Valve
+            -> decompresses with bunzip2
+            -> POSTs raw .dem to odota/parser (Docker)
+            -> extracts CHAT_MESSAGE_GLYPH_USED events
+            -> attributes heroes using OpenDota glyph counts
             -> writes results to Supabase
                   |
-          User's browser <- polls Supabase (auto-updates)
+          User's browser <- polls every 5s (auto-updates when done)
 ```
 
 ## Deployment

@@ -22,9 +22,9 @@ Dota 2 match analyzer that shows who pressed the Glyph of Fortification.
 
 The app uses a tiered approach to get glyph timestamps:
 
-1. **STRATZ API** (primary, fast) — queried first on every match page load
-2. **Supabase cache** (fallback) — if STRATZ has no data, check if parser already processed this match
-3. **Parser queue** (async fallback) — if no cache, create a "pending" job in Supabase; a worker on the Mac Mini picks it up, parses the replay, and writes results back
+1. **Supabase cache** (fastest) — check if this match was already fetched/parsed; both STRATZ and parser results are cached here
+2. **STRATZ API** (primary source) — if no cache, query STRATZ; results are saved to Supabase for future requests
+3. **Parser queue** (async fallback) — if STRATZ has no data, create a "pending" job in Supabase; a worker on the Mac Mini picks it up, parses the replay, and writes results back
 
 ### Hero Attribution Logic
 
@@ -34,12 +34,12 @@ Both STRATZ and parser routes use the same strategy: get per-player glyph counts
 
 - `src/app/page.tsx` - Homepage with match ID search
 - `src/app/matches/[id]/page.tsx` - Match detail page (server component, fetches from OpenDota)
-- `src/app/api/glyph/[id]/route.ts` - Unified glyph endpoint: STRATZ -> Supabase cache -> pending job
+- `src/app/api/glyph/[id]/route.ts` - Unified glyph endpoint: Supabase cache -> STRATZ (saves to cache) -> pending job
 - `src/app/api/stratz/[id]/route.ts` - STRATZ API route (also used directly by glyph route)
 - `src/app/api/replay/[id]/route.ts` - Legacy direct replay parser route (needs PARSER_URL)
 - `src/app/api/parse/[id]/route.ts` - OpenDota parse request route
 - `src/lib/stratz.ts` - Shared STRATZ fetching logic with hero attribution
-- `src/lib/supabase.ts` - Supabase client, cache/queue helpers
+- `src/lib/supabase.ts` - Supabase client, cache/queue helpers, `saveGlyphEvents()` for caching STRATZ results
 - `src/lib/opendota.ts` - OpenDota API client, data transforms, building kill extraction
 - `src/lib/types.ts` - TypeScript interfaces (OpenDotaMatch, GlyphEvent, MatchGlyphResult, etc.)
 - `src/components/GlyphResult.tsx` - Main result component; auto-fetches glyph timestamps, polls for parser results
@@ -54,9 +54,10 @@ Both STRATZ and parser routes use the same strategy: get per-player glyph counts
 2. Server component (`matches/[id]/page.tsx`) fetches match + heroes from OpenDota
 3. `transformMatchData()` extracts player stats, glyph counts, building kills
 4. Client component (`GlyphResult`) auto-fetches `/api/glyph/[id]` on mount
-5. Glyph route tries STRATZ first, then Supabase cache, then creates pending job
+5. Glyph route checks Supabase cache first (instant for repeat visits), then STRATZ (saves to cache), then creates pending parser job
 6. If pending/parsing, client polls every 5 seconds until completed
 7. Mac Mini worker picks up pending jobs, parses replays, writes results to Supabase
+8. All sources (STRATZ + parser) cache results in Supabase — subsequent visits are instant
 
 ### Parser Worker Architecture
 
