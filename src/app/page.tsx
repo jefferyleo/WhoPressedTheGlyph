@@ -1,4 +1,5 @@
 import MatchInput from "@/components/MatchInput";
+import GlyphTips from "@/components/GlyphTips";
 
 export default function HomePage() {
   return (
@@ -43,6 +44,7 @@ export default function HomePage() {
         />
         Buy me a coffee
       </a>
+      <GlyphTips />
     </div>
   );
 }
