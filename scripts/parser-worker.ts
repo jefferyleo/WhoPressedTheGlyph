@@ -146,7 +146,8 @@ async function parseReplay(replayUrl: string, players: MatchData["players"]): Pr
 
   // Collect raw glyph events with team info
   // Parser player1 field = team number: 2 = Radiant, 3 = Dire
-  const rawGlyphs: { time: number; isRadiant: boolean }[] = [];
+  // Sometimes player1 is 0 for Radiant and 1 for Dire in some parser versions or game modes
+  const rawGlyphs: { time: number; teamId: number }[] = [];
 
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
@@ -157,10 +158,10 @@ async function parseReplay(replayUrl: string, players: MatchData["players"]): Pr
         event.type === "CHAT_MESSAGE_GLYPH_USED" ||
         event.type === 12
       ) {
-        const team = event.player1 ?? event.value ?? -1;
+        const teamId = event.player1 ?? event.value ?? -1;
         rawGlyphs.push({
           time: Math.round(event.time ?? 0),
-          isRadiant: team === 2, // Dota 2: team 2 = Radiant, team 3 = Dire
+          teamId: teamId,
         });
       }
     } catch {
@@ -168,8 +169,13 @@ async function parseReplay(replayUrl: string, players: MatchData["players"]): Pr
     }
   }
 
+  console.log(`  Raw glyph events found by parser: ${rawGlyphs.length}`);
+  for (const g of rawGlyphs) {
+    console.log(`    Time: ${g.time}, Team ID: ${g.teamId}`);
+  }
+
   // Attribute heroes using OpenDota per-player glyph counts
-  // Same queue strategy as STRATZ route
+  // Same queue strategy as STRATZ route but with better team mapping
   const radiantQueue: { heroId: number; playerSlot: number }[] = [];
   const direQueue: { heroId: number; playerSlot: number }[] = [];
 
@@ -186,27 +192,64 @@ async function parseReplay(replayUrl: string, players: MatchData["players"]): Pr
     }
   }
 
+  // Heuristic for team IDs:
+  // If we see 2 and 3, they are Radiant and Dire.
+  // If we see 0 and 1, they are Radiant and Dire.
+  const uniqueTeamIds = Array.from(new Set(rawGlyphs.map(g => g.teamId))).sort();
+  console.log(`  Unique team IDs found in parser: ${uniqueTeamIds.join(", ")}`);
+
   let radiantIdx = 0;
   let direIdx = 0;
 
   const glyphEvents: GlyphEvent[] = rawGlyphs.map((g) => {
+    let isRadiant = false;
+    
+    // Default mapping: 2 = Radiant, 3 = Dire
+    // Fallback mapping: 0 = Radiant, 1 = Dire (some parser versions)
+    if (g.teamId === 2 || g.teamId === 0) {
+      isRadiant = true;
+    } else if (g.teamId === 3 || g.teamId === 1) {
+      isRadiant = false;
+    } else {
+      // If we only have one team's glyphs and the ID is weird, 
+      // check which team has glyphs left in the queue.
+      if (radiantQueue.length > 0 && direQueue.length === 0) isRadiant = true;
+      else if (direQueue.length > 0 && radiantQueue.length === 0) isRadiant = false;
+      else {
+        // Last resort: assume Radiant if ID is even, Dire if odd (common in some formats)
+        isRadiant = g.teamId % 2 === 0;
+      }
+    }
+
     let heroId: number | null = null;
     let playerSlot = -1;
 
-    if (g.isRadiant && radiantIdx < radiantQueue.length) {
+    if (isRadiant && radiantIdx < radiantQueue.length) {
       heroId = radiantQueue[radiantIdx].heroId;
       playerSlot = radiantQueue[radiantIdx].playerSlot;
       radiantIdx++;
-    } else if (!g.isRadiant && direIdx < direQueue.length) {
+    } else if (!isRadiant && direIdx < direQueue.length) {
       heroId = direQueue[direIdx].heroId;
       playerSlot = direQueue[direIdx].playerSlot;
       direIdx++;
+    } else if (isRadiant && direIdx < direQueue.length && radiantIdx >= radiantQueue.length) {
+       // Team mismatch: if we think it's Radiant but Radiant queue is empty, try Dire
+       heroId = direQueue[direIdx].heroId;
+       playerSlot = direQueue[direIdx].playerSlot;
+       isRadiant = false;
+       direIdx++;
+    } else if (!isRadiant && radiantIdx < radiantQueue.length && direIdx >= direQueue.length) {
+       // Team mismatch: if we think it's Dire but Dire queue is empty, try Radiant
+       heroId = radiantQueue[radiantIdx].heroId;
+       playerSlot = radiantQueue[radiantIdx].playerSlot;
+       isRadiant = true;
+       radiantIdx++;
     }
 
     return {
       time: g.time,
       playerSlot,
-      isRadiant: g.isRadiant,
+      isRadiant,
       heroId,
     };
   });
