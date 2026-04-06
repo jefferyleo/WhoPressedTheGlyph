@@ -90,7 +90,9 @@ export default function TowerTimeline({
         </p>
       )}
       {glyphError && !loadingGlyphs && glyphStatus !== "pending" && glyphStatus !== "parsing" && (
-        <p className="mb-4 text-sm text-red-400 text-center">{glyphError}</p>
+        <p className={`mb-4 text-sm text-center ${glyphStatus === "no_replay" ? "text-amber-400" : "text-red-400"}`}>
+          {glyphError}
+        </p>
       )}
 
       {/* Timeline */}

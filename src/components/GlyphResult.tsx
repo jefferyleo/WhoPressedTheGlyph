@@ -71,7 +71,7 @@ export default function GlyphResult({ match, heroes }: GlyphResultProps) {
         } else if ((data.glyphEvents ?? []).length === 0) {
           setGlyphError("No glyph events found for this match.");
         }
-      } else if (data.status === "failed") {
+      } else if (data.status === "failed" || data.status === "no_replay" || data.status === "error") {
         setGlyphError(data.error || "Replay parsing failed.");
         if (pollRef.current) {
           clearInterval(pollRef.current);

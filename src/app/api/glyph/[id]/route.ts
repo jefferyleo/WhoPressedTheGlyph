@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { fetchStratzGlyphEvents } from "@/lib/stratz";
 import { getCachedGlyphEvents, requestParse, saveGlyphEvents } from "@/lib/supabase";
+import { getMatch } from "@/lib/opendota";
 
 /**
  * Unified glyph endpoint:
  * 1. Check Supabase cache first (instant if previously fetched)
- * 2. Try STRATZ (save to cache on success)
+ * 2. Try STRATZ (save to cache on success, only if hero attribution succeeded)
  * 3. If pending/parsing parser job exists, return status for polling
- * 4. Create a new pending parse job for Mac Mini worker
+ * 4. Check replay URL exists before creating parse job
  */
 export async function GET(
   _request: Request,
@@ -46,8 +47,12 @@ export async function GET(
   try {
     const result = await fetchStratzGlyphEvents(id);
     if (result.glyphEvents.length > 0) {
-      // Save to Supabase cache for future requests
-      await saveGlyphEvents(matchId, result.glyphEvents, "stratz");
+      // Only cache if hero attribution succeeded (at least one event has heroId)
+      const hasHeroAttribution = result.glyphEvents.some((e) => e.heroId !== null);
+
+      if (hasHeroAttribution) {
+        await saveGlyphEvents(matchId, result.glyphEvents, "stratz");
+      }
 
       return NextResponse.json({
         glyphEvents: result.glyphEvents,
@@ -59,7 +64,27 @@ export async function GET(
     // STRATZ failed, continue to fallback
   }
 
-  // 3. No cache and no STRATZ data — create a pending parse job
+  // 3. No cache and no STRATZ data — check if replay exists before creating parse job
+  try {
+    const match = await getMatch(id);
+    if (!match.replay_url) {
+      return NextResponse.json({
+        glyphEvents: [],
+        source: "none",
+        status: "no_replay",
+        error: "No replay available. Click 'Request Parse' to parse the match on OpenDota first, then refresh.",
+      });
+    }
+  } catch {
+    return NextResponse.json({
+      glyphEvents: [],
+      source: "none",
+      status: "error",
+      error: "Could not check replay availability.",
+    });
+  }
+
+  // 4. Replay exists — create a pending parse job
   const job = await requestParse(matchId);
 
   if (job) {
@@ -70,7 +95,7 @@ export async function GET(
     });
   }
 
-  // 4. Supabase not configured — return empty
+  // 5. Supabase not configured — return empty
   return NextResponse.json({
     glyphEvents: [],
     source: "none",
