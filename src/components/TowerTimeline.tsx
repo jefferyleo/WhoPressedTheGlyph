@@ -404,7 +404,7 @@ function GlyphUserList({
 }
 
 function EfficiencyCard({ summary }: { summary: TeamGlyphSummary }) {
-  if (summary.total === 0) return null;
+  if (summary.total === 0) return <div />;
 
   const teamColor = summary.team === "radiant" ? "text-green-400" : "text-red-400";
   const teamLabel = summary.team === "radiant" ? "Radiant" : "Dire";
